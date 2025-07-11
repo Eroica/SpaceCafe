@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.2.0"
     application
+    id("com.gradleup.shadow") version "9.0.0-rc1"
     id("com.github.gmazzo.buildconfig") version "5.6.7"
 }
 
@@ -24,8 +25,13 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
-tasks.test {
-    useJUnitPlatform()
+tasks {
+    test {
+        useJUnitPlatform()
+    }
+    shadowJar {
+        archiveClassifier = ""
+    }
 }
 kotlin {
     jvmToolchain(21)
