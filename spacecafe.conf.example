@@ -1,0 +1,73 @@
+// SpaceCafe gemini server configuration
+
+// listening address/port
+address = "127.0.0.1"
+port = 1965
+
+// how long until an idle connection is closed
+idle-timeout = 10000
+
+// default MIME type if detection fails
+default-mime-type = "text/plain"
+
+// by default a built-in resolver is used and it includes the Gemini MIME type;
+// use this to define your own MIME types (will replace the built-in resolver)
+// mime-types = {
+//     "text/gemini": [".gmi", ".gemini"]
+// }
+
+// hosts configuration
+virtual-hosts = [
+    {
+        host = "localhost"
+        root = "/var/gemini/localhost/"
+        index-file = "index.gmi"
+
+        // default for the virtual host
+        directory-listing = true
+
+        // adds the "size" extension to responses
+        // size = false
+
+        // optional parameters for text/gemini
+        // gemini-params = "charset=utf-8; lang=en"
+
+        // optional environment variables to pass to CGIs
+        // environment = { "VAR1": "VALUE1", "VAR2": "VALUE2" }
+
+        // override defaults, set properties per directory
+        // important: directory's path is relative to the root
+        //
+        // directories = [
+        //     { path = "relative/path/", directory-listing = true, allow-cgi = false, cache = 86400 }
+        // ]
+
+        // user directory support
+        // important: users are not checked, it only translates
+        // gemini://host/~user/ to use the user specific root path
+        //
+        // user-directories = false
+        // user-directory-path = "/home/{user}/public_gemini/"
+
+        key-store {
+            path = "/path/to/keystore.jks"
+            alias = "localhost"
+            password = "secret"
+        }
+    }
+]
+
+// SSL support
+enabled-protocols = [ "TLSv1.2", "TLSv1.3" ]
+enabled-cipher-suites = [
+    // TLSv 1.2
+    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+    "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+    "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256",
+    // TLSv 1.3
+    "TLS_AES_128_GCM_SHA256",
+    "TLS_AES_256_GCM_SHA384"
+]
