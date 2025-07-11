@@ -11,10 +11,21 @@ import java.security.cert.X509Certificate
 import javax.net.ssl.*
 import javax.net.ssl.StandardConstants.SNI_HOST_NAME
 
-class SniKeyManager(
+class SniKeyManager private constructor(
     private val keyManager: X509ExtendedKeyManager,
     private val defaultAlias: String
 ) : X509ExtendedKeyManager() {
+    companion object {
+        operator fun invoke(keyManagerFactory: KeyManagerFactory, defaultAlias: String): SniKeyManager {
+            val keyManager = keyManagerFactory.keyManagers
+                .filterIsInstance<X509ExtendedKeyManager>()
+                .firstOrNull()
+                ?: throw RuntimeException("Failed to init SNI")
+
+            return SniKeyManager(keyManager, defaultAlias)
+        }
+    }
+
     override fun getClientAliases(
         keyType: String?,
         issuers: Array<out Principal?>?
@@ -116,7 +127,7 @@ fun genSSLContext(
     val kmFac = KeyManagerFactory.getInstance("SunX509")
     kmFac.init(ks, "secret".toCharArray())
 
-    val sniKeyManager = createSniKeyManager(kmFac, "localhost")
+    val sniKeyManager = SniKeyManager(kmFac, "localhost")
 
     val ctx = SSLContext.getInstance("TLSv1.2")
     ctx.init(
@@ -126,16 +137,4 @@ fun genSSLContext(
     )
 
     return ctx
-}
-
-fun createSniKeyManager(
-    keyManagerFactory: KeyManagerFactory,
-    defaultAlias: String
-): SniKeyManager {
-    val keyManager = keyManagerFactory.keyManagers
-        .filterIsInstance<X509ExtendedKeyManager>()
-        .firstOrNull()
-        ?: throw RuntimeException("Failed to init SNI")
-
-    return SniKeyManager(keyManager, defaultAlias)
 }
