@@ -28,42 +28,42 @@ class Server(
     private val geminiHandler = GeminiHandler(conf)
 
     fun handleReq(req: String, remoteAddr: String): Response {
-        val uri = URI.create(req)
-        val scheme = uri.scheme
+        return try {
+            val uri = URI.create(req)
+            val scheme = uri.scheme
 
-        return when (scheme) {
-            null -> {
-                logger.debug { "no scheme" }
-                BadRequest(req)
-            }
-
-            "gemini" if uri.port != -1 && uri.port != conf.port -> {
-                logger.debug { "invalid port, is a proxy request" }
-                ProxyRequestRefused(req)
-            }
-
-            "gemini" if uri.port == -1 && conf.port != DEFAULT_PORT -> {
-                logger.debug { "default port but non default was configured, is a proxy request" }
-                ProxyRequestRefused(req)
-            }
-
-            "gemini" -> {
-                logger.debug { "gemini request: $req" }
-                try {
-                    geminiHandler.handle(req, uri, remoteAddr)
-                } catch (e: IllegalArgumentException) {
-                    logger.debug { "invalid request: ${e.message}" }
+            return when (scheme) {
+                null -> {
+                    logger.debug { "no scheme" }
                     BadRequest(req)
-                } catch (error: Exception) {
-                    logger.error(error) { "Internal server error" }
-                    PermanentFailure(req, "Internal server error")
+                }
+
+                "gemini" if uri.port != -1 && uri.port != conf.port -> {
+                    logger.debug { "invalid port, is a proxy request" }
+                    ProxyRequestRefused(req)
+                }
+
+                "gemini" if uri.port == -1 && conf.port != DEFAULT_PORT -> {
+                    logger.debug { "default port but non default was configured, is a proxy request" }
+                    ProxyRequestRefused(req)
+                }
+
+                "gemini" -> {
+                    logger.debug { "gemini request: $req" }
+                    geminiHandler.handle(req, uri, remoteAddr)
+                }
+
+                else -> {
+                    logger.debug { "scheme $scheme not allowed" }
+                    ProxyRequestRefused(req)
                 }
             }
-
-            else -> {
-                logger.debug { "scheme $scheme not allowed" }
-                ProxyRequestRefused(req)
-            }
+        } catch (e: IllegalArgumentException) {
+            logger.debug { "invalid request: ${e.message}" }
+            BadRequest(req)
+        } catch (error: Exception) {
+            logger.error(error) { "Internal server error" }
+            PermanentFailure(req, "Internal server error")
         }
     }
 
