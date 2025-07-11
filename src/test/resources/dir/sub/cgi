@@ -1,0 +1,6 @@
+#!/bin/bash
+
+echo -e "20 text/gemini\r\n"
+echo "SHOULD NOT RUN"
+exit 1
+
