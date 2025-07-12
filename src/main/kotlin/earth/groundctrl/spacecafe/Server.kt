@@ -125,6 +125,7 @@ class Server(
                 }
 
                 writeResponse(writer, response)
+                it.shutdownOutput()
             }
         } catch (e: Exception) {
             logger.error(e) { "$remoteAddr - connection error: ${e.message}" }
