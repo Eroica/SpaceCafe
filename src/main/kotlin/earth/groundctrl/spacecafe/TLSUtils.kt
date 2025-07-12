@@ -129,12 +129,7 @@ fun genSSLContext(
 
     val sniKeyManager = SniKeyManager(kmFac, "localhost")
 
-    val ctx = SSLContext.getInstance("TLSv1.2")
-    ctx.init(
-        arrayOf(sniKeyManager),
-        tmFac.trustManagers,
-        SecureRandom()
-    )
-
-    return ctx
+    return SSLContext.getInstance("TLS").apply {
+        init(arrayOf(sniKeyManager), tmFac.trustManagers, SecureRandom())
+    }
 }

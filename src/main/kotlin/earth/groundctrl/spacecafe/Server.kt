@@ -2,11 +2,7 @@ package earth.groundctrl.spacecafe
 
 import earth.groundctrl.spacecafe.handlers.GeminiHandler
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.*
 import java.io.BufferedOutputStream
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -85,17 +81,15 @@ class Server(
             logger.info { "Certificate for ${it.key} - serial-no: ${it.value.first.serialNumber}, final-date: ${it.value.first.notAfter}" }
         }
 
-        val engine = sslContext.createSSLEngine()
-        engine.useClientMode = false
-        engine.enabledCipherSuites = conf.enabledCipherSuites.toTypedArray()
-        engine.enabledProtocols = conf.enabledProtocols.toTypedArray()
-
         val socket = sslContext.serverSocketFactory.createServerSocket(conf.port, 100) as SSLServerSocket
 
         return scope.launch {
             try {
                 while (isActive) {
                     val client = socket.accept() as SSLSocket
+                    client.useClientMode = false
+                    client.enabledCipherSuites = conf.enabledCipherSuites.toTypedArray()
+                    client.enabledProtocols = conf.enabledProtocols.toTypedArray()
                     launch { handleConnection(client) }
                 }
             } finally {
