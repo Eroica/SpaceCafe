@@ -10,7 +10,7 @@ It should more or less support all of [SpaceBean's features](https://git.usebox.
 
 You need to create a `spacecafe.conf` configuration file, and a certificate. Take a look at the example configuration to see how to configure the server.
 
-Download or build a JAR file, and then you can run: `java -jar spacecafe-VERSION.jar -c myconfig.conf`
+[Download](https://github.com/Eroica/SpaceCafe/releases) or build the SpaceCafe JAR file, and then you can run: `java -jar spacecafe-VERSION.jar -c myconfig.conf`
 
 ### Differences to SpaceBean's config
 
@@ -22,7 +22,7 @@ Using `keytool`:
 
 `keytool -genkey -keyalg RSA -alias ALIAS -keystore keystore.jks -storepass SECRET -noprompt -validity 36500 -keysize 2048`
 
-When prompted, enter the domain name as the first "name" (_CN_). For example, if you run and test the server locally, just `localhost` or `127.0.0.1`.
+When prompted, enter the domain name as the first "name" (_CN_). For example, if you run and test the server locally, just `localhost`.
 
 ## Development
 
@@ -30,6 +30,7 @@ SpaceCafe is written in Kotlin and built with Gradle. `jvmToolchain` is currentl
 
 * `gradle build` to build the project
 * `gradle run` to build and run the server
+* `gradle shadowJar` to build a fat JAR (contains all dependencies)
 
 Note that by default, a configuration file `spacecafe.conf` is expected in the working directory.
 
