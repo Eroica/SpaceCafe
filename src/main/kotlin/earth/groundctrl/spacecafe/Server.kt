@@ -3,12 +3,12 @@ package earth.groundctrl.spacecafe
 import earth.groundctrl.spacecafe.handlers.GeminiHandler
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
-import java.io.BufferedOutputStream
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import tlschannel.ServerTlsChannel
+import java.net.InetSocketAddress
 import java.net.URI
-import javax.net.ssl.SSLServerSocket
-import javax.net.ssl.SSLSocket
+import java.nio.ByteBuffer
+import java.nio.channels.ServerSocketChannel
+import java.nio.charset.StandardCharsets
 
 private val logger = KotlinLogging.logger {}
 
@@ -28,7 +28,7 @@ class Server(
             val uri = URI.create(req)
             val scheme = uri.scheme
 
-            return when (scheme) {
+            when (scheme) {
                 null -> {
                     logger.debug { "no scheme" }
                     BadRequest(req)
@@ -64,82 +64,67 @@ class Server(
     }
 
     fun serve(): Job {
-        val certs = conf.virtualHosts.associate {
-            val key = it.keyStore
-
-            try {
-                it.host to loadCert(key.path, key.alias, key.password)
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to load ${key.alias} cert from keystore ${key.path}" }
-                throw (e)
-            }
+        val sslContexts = conf.virtualHosts.associate {
+            it.host to genSSLContext(it)
         }
+        val sniFactory = sniKeyManager(sslContexts)
 
-        val sslContext = genSSLContext(certs)
-
-        certs.forEach {
-            logger.info { "Certificate for ${it.key} - serial-no: ${it.value.first.serialNumber}, final-date: ${it.value.first.notAfter}" }
-        }
-
-        val socket = sslContext.serverSocketFactory.createServerSocket(conf.port, 100) as SSLServerSocket
+        val serverChannel = ServerSocketChannel.open()
+        serverChannel.bind(InetSocketAddress(conf.address, conf.port), 100)
 
         return scope.launch {
             try {
                 while (isActive) {
-                    val client = socket.accept() as SSLSocket
-                    client.useClientMode = false
-                    client.enabledCipherSuites = conf.enabledCipherSuites.toTypedArray()
-                    client.enabledProtocols = conf.enabledProtocols.toTypedArray()
-                    launch { handleConnection(client) }
+                    val plainChannel = serverChannel.accept()
+                    val builder = ServerTlsChannel.newBuilder(plainChannel, sniFactory)
+                    val tlsChannel = builder.build()
+                    val remoteAddr = plainChannel.socket().inetAddress.hostAddress
+
+                    try {
+                        handleConnection(tlsChannel, remoteAddr)
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error handling TLS connection" }
+                    } finally {
+                        tlsChannel.close()
+                        plainChannel.close()
+                    }
                 }
             } finally {
-                socket.close()
+                serverChannel.close()
             }
         }
     }
 
-    private suspend fun handleConnection(socket: SSLSocket) {
-        val remoteAddr = socket.inetAddress.hostAddress
+    private suspend fun handleConnection(tlsChannel: ServerTlsChannel, remoteAddr: String) {
         logger.debug { "new connection $remoteAddr" }
 
-        try {
-            socket.use {
-                val reader = BufferedReader(InputStreamReader(it.inputStream, Charsets.UTF_8))
-                val writer = BufferedOutputStream(it.outputStream)
+        val readBuffer = ByteBuffer.allocate(MAX_REQ_LEN)
+        val requestBuilder = StringBuilder()
 
-                val reqLine = withTimeout(conf.idleTimeout) { reader.readLine() }
-                    ?: run {
-                        logger.warn { "$remoteAddr - empty request received" }
-                        writeResponse(writer, BadRequest("Empty request"))
-                        return
-                    }
-
-                val reqStr = reqLine.take(MAX_REQ_LEN)
-                logger.debug { "$remoteAddr - request: $reqStr" }
-
-                val response = try {
-                    handleReq(reqStr, remoteAddr)
-                } catch (e: Exception) {
-                    logger.error(e) { "Error processing request from $remoteAddr" }
-                    PermanentFailure(reqStr, "Internal server error: ${e.message}")
-                }
-
-                writeResponse(writer, response)
-                it.shutdownOutput()
+        while (true) {
+            readBuffer.clear()
+            val bytesRead =  tlsChannel.read(readBuffer)
+            if (bytesRead == -1) {
+                return
             }
-        } catch (e: Exception) {
-            logger.error(e) { "$remoteAddr - connection error: ${e.message}" }
-        }
-    }
 
-    private suspend fun writeResponse(writer: BufferedOutputStream, response: Response) {
-        try {
-            response.toFlow().collect { chunk -> writer.write(chunk) }
-            writer.flush()
-            logger.info { "Response sent: ${response.status} ${response.bodySize} bytes" }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to write response: ${e.message}" }
-            throw e
+            readBuffer.flip()
+            val chunk = StandardCharsets.UTF_8.decode(readBuffer).toString()
+            requestBuilder.append(chunk)
+
+            if (requestBuilder.contains("\r\n")) {
+                break
+            }
+        }
+
+        val requestLine = requestBuilder.toString().lineSequence().first().trim()
+        val response = handleReq(requestLine, remoteAddr)
+
+        response.toFlow().collect { chunk ->
+            val writeBuffer = ByteBuffer.wrap(chunk)
+            while (writeBuffer.hasRemaining()) {
+                tlsChannel.write(writeBuffer)
+            }
         }
     }
 }

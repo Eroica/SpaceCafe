@@ -1,135 +1,59 @@
 package earth.groundctrl.spacecafe
 
+import io.github.oshai.kotlinlogging.KotlinLogging
+import tlschannel.SniSslContextFactory
 import java.io.FileInputStream
-import java.net.Socket
 import java.security.KeyStore
-import java.security.KeyStore.PrivateKeyEntry
-import java.security.Principal
-import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
-import javax.net.ssl.*
-import javax.net.ssl.StandardConstants.SNI_HOST_NAME
+import java.util.*
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SNIHostName
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
 
-class SniKeyManager private constructor(
-    private val keyManager: X509ExtendedKeyManager,
-    private val defaultAlias: String
-) : X509ExtendedKeyManager() {
-    companion object {
-        operator fun invoke(keyManagerFactory: KeyManagerFactory, defaultAlias: String): SniKeyManager {
-            val keyManager = keyManagerFactory.keyManagers
-                .filterIsInstance<X509ExtendedKeyManager>()
-                .firstOrNull()
-                ?: throw RuntimeException("Failed to init SNI")
+/* Different to SpaceBeans, this mostly relies on https://github.com/marianobarrios/tls-channel
+   to set up a TLS channel. A custom X509ExtendedKeyManager class is not necessary.
+   I kept a "sniKeyManager" factory for a similar API. "genSSLContext" works on VirtualHost
+   directly instead of loading certificates first. */
 
-            return SniKeyManager(keyManager, defaultAlias)
-        }
-    }
+private val logger = KotlinLogging.logger {}
 
-    override fun getClientAliases(
-        keyType: String?,
-        issuers: Array<out Principal?>?
-    ): Array<out String?>? {
-        throw UnsupportedOperationException()
-    }
-
-    override fun chooseClientAlias(
-        keyType: Array<out String?>?,
-        issuers: Array<out Principal?>?,
-        socket: Socket?
-    ): String? {
-        throw UnsupportedOperationException()
-    }
-
-    override fun chooseEngineClientAlias(
-        keyType: Array<out String?>?,
-        issuers: Array<out Principal?>?,
-        engine: SSLEngine?
-    ): String? {
-        throw UnsupportedOperationException()
-    }
-
-    override fun getServerAliases(
-        keyType: String?,
-        issuers: Array<out Principal?>?
-    ): Array<out String?>? {
-        return keyManager.getServerAliases(keyType, issuers)
-    }
-
-    override fun chooseServerAlias(
-        keyType: String?,
-        issuers: Array<out Principal?>?,
-        socket: Socket?
-    ): String? {
-        return keyManager.chooseServerAlias(keyType, issuers, socket)
-    }
-
-    override fun chooseEngineServerAlias(
-        keyType: String?,
-        issuers: Array<out Principal?>?,
-        engine: SSLEngine
-    ): String? {
-        val sniHost = (engine.handshakeSession as ExtendedSSLSession).requestedServerNames
-            .filterIsInstance<SNIHostName>()
-            .firstOrNull { it.type == SNI_HOST_NAME }
-            ?.asciiName
-
-        return sniHost?.takeIf {
-            getCertificateChain(it) != null && getPrivateKey(it) != null
-        } ?: defaultAlias
-    }
-
-    override fun getCertificateChain(alias: String?): Array<out X509Certificate?>? {
-        return keyManager.getCertificateChain(alias)
-    }
-
-    override fun getPrivateKey(alias: String?): PrivateKey? {
-        return keyManager.getPrivateKey(alias)
-    }
-}
-
-fun loadCert(
-    path: String,
-    alias: String,
-    password: String
-): Pair<X509Certificate, PrivateKey> {
-    FileInputStream(path).use {
-        val ks = KeyStore.getInstance("JKS")
-        ks.load(it, password.toCharArray())
-
-        val cert = ks.getCertificate(alias) as X509Certificate
-        val privateKey = (ks.getEntry(
-            alias, KeyStore.PasswordProtection(password.toCharArray())
-        ) as PrivateKeyEntry).privateKey
-
-        return Pair(cert, privateKey)
-    }
-}
-
-fun genSSLContext(
-    certs: Map<String, Pair<X509Certificate, PrivateKey>>
-): SSLContext {
+fun genSSLContext(vhost: VirtualHost): SSLContext {
     val ks = KeyStore.getInstance("JKS")
-    ks.load(null, "secret".toCharArray())
-    certs.forEach { (hostname, pair) ->
-        val (cert, pk) = pair
-        ks.setKeyEntry(
-            hostname,
-            pk,
-            "secret".toCharArray(),
-            arrayOf(cert)
-        )
+    FileInputStream(vhost.keyStore.path).use {
+        ks.load(it, vhost.keyStore.password.toCharArray())
     }
+
+    val cert = ks.getCertificate(vhost.keyStore.alias) as X509Certificate
+    logger.info { "Certificate for ${vhost.host} - serial-no: ${cert.serialNumber}, final-date: ${cert.notAfter}" }
+
+    val kmFac = KeyManagerFactory.getInstance("SunX509")
+    kmFac.init(ks, vhost.keyStore.password.toCharArray())
 
     val tmFac = TrustManagerFactory.getInstance("SunX509")
     tmFac.init(ks)
 
-    val kmFac = KeyManagerFactory.getInstance("SunX509")
-    kmFac.init(ks, "secret".toCharArray())
+    val context = SSLContext.getInstance("TLS").apply {
+        init(kmFac.keyManagers, tmFac.trustManagers, SecureRandom())
+    }
 
-    val sniKeyManager = SniKeyManager(kmFac, "localhost")
+    return context
+}
 
-    return SSLContext.getInstance("TLS").apply {
-        init(arrayOf(sniKeyManager), tmFac.trustManagers, SecureRandom())
+fun sniKeyManager(sslContexts: Map<String, SSLContext>): SniSslContextFactory {
+    return SniSslContextFactory { sniServerName ->
+        if (!sniServerName.isPresent) {
+            return@SniSslContextFactory Optional.empty()
+        }
+
+        val name = sniServerName.get()
+        if (name !is SNIHostName) {
+            return@SniSslContextFactory Optional.empty()
+        }
+
+        return@SniSslContextFactory sslContexts[name.asciiName]?.let {
+            Optional.of(it)
+        } ?: Optional.empty()
     }
 }
