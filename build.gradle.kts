@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "earth.groundctrl"
-version = "v2025.07"
+version = "v2025.07a"
 
 repositories {
     mavenCentral()
