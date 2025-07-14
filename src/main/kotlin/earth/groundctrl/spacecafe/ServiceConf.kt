@@ -40,39 +40,37 @@ data class VirtualHost(
         val USER_RE = Regex("""/~([a-z_][a-z0-9_-]*)(/{1}.*)?""")
     }
 
-    fun getDirectoryListing(path: Path): Boolean =
-        directories.find { it.path == path.toString() }?.directoryListing ?: directoryListing
+    fun getDirectoryListing(path: Path): Boolean = directories.find { it.path == path.toString() }
+        ?.directoryListing
+        ?: directoryListing
 
-    fun getCgi(path: Path): Path? =
-        directories.filter { it.allowCgi == true }
-            .sortedByDescending { it.path.length }
-            .find { path.startsWith(it.path) && path.toString() != it.path }
-            ?.let { d ->
-                val dp = FileSystems.getDefault().getPath(d.path).normalize()
-                FileSystems.getDefault().getPath(d.path, path.getName(dp.nameCount).toString())
-            }
-
-    fun getCache(path: Path): Int? =
-        directories.filter { it.cache != null }
-            .sortedByDescending { it.path.length }
-            .find { path.startsWith(it.path) }
-            ?.cache
-
-    fun getRoot(path: String): Pair<String, String> =
-        when {
-            USER_RE.matches(path) && userDirectories && userDirectoryPath != null -> {
-                val matchResult = USER_RE.find(path)!!
-                val user = matchResult.groupValues[1]
-                val userPath = matchResult.groupValues[2]
-                if (userPath.isEmpty()) {
-                    userDirectoryPath.replace(USER_TAG, user) to "."
-                } else {
-                    userDirectoryPath.replace(USER_TAG, user) to userPath
-                }
-            }
-
-            else -> root to path
+    fun getCgi(path: Path): Path? = directories.filter { it.allowCgi == true }
+        .sortedByDescending { it.path.length }
+        .find { path.startsWith(it.path) && path.toString() != it.path }
+        ?.let { d ->
+            val dp = FileSystems.getDefault().getPath(d.path).normalize()
+            FileSystems.getDefault().getPath(d.path, path.getName(dp.nameCount).toString())
         }
+
+    fun getCache(path: Path): Int? = directories.filter { it.cache != null }
+        .sortedByDescending { it.path.length }
+        .find { path.startsWith(it.path) }
+        ?.cache
+
+    fun getRoot(path: String): Pair<String, String> = when {
+        USER_RE.matches(path) && userDirectories && userDirectoryPath != null -> {
+            val matchResult = USER_RE.find(path)!!
+            val user = matchResult.groupValues[1]
+            val userPath = matchResult.groupValues[2]
+            if (userPath.isEmpty()) {
+                userDirectoryPath.replace(USER_TAG, user) to "."
+            } else {
+                userDirectoryPath.replace(USER_TAG, user) to userPath
+            }
+        }
+
+        else -> root to path
+    }
 }
 
 data class ServiceConf(
