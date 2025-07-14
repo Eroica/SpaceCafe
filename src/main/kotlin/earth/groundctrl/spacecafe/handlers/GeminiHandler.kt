@@ -4,6 +4,8 @@ import earth.groundctrl.spacecafe.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.net.URI
 import java.nio.file.FileSystems
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isExecutable
 
 private val logger = KotlinLogging.logger {}
 
@@ -38,7 +40,7 @@ class GeminiHandler(conf: ServiceConf) : ProtocolHandler(conf) {
                 logger.debug { "requesting: '$resource', cgi is '$cgi'" }
 
                 when {
-                    cgi?.toFile()?.let { it.isFile && it.canExecute() } == true -> {
+                    cgi?.let { !it.isDirectory() && it.isExecutable() } == true -> {
                         logger.debug { "is cgi, will execute" }
 
                         val cgiFile = cgi.toFile()
