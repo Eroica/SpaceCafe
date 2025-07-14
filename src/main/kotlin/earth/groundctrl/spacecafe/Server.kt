@@ -118,13 +118,15 @@ class Server(
         }
 
         val requestLine = requestBuilder.toString().lineSequence().first().trim()
-        val response = handleReq(requestLine, remoteAddr)
+        val resp = handleReq(requestLine, remoteAddr)
 
-        response.toFlow().collect { chunk ->
+        resp.toFlow().collect { chunk ->
             val writeBuffer = ByteBuffer.wrap(chunk)
             while (writeBuffer.hasRemaining()) {
                 tlsChannel.write(writeBuffer)
             }
         }
+
+        logger.info { """$remoteAddr "${resp.req}" ${resp.status} ${resp.bodySize}""" }
     }
 }
