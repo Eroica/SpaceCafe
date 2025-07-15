@@ -15,6 +15,7 @@ You need to create a `spacecafe.conf` configuration file, and a certificate. Tak
 ### Differences to SpaceBean's config
 
 * `idle-timeout` must be specified as an integer of milliseconds (`10000`) instead of a string like `10 seconds`
+* If no config file is specified, the default one is only searched in the current directory instead of something like `/etc/...`
 
 ### Create a certificate
 
