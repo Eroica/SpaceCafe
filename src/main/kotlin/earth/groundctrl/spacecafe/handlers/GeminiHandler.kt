@@ -103,7 +103,7 @@ class GeminiHandler(conf: ServiceConf) : ProtocolHandler(conf) {
                             logger.debug { "directory listing" }
                             DirListing(
                                 req,
-                                meta = "text/gemini",
+                                meta = GEMINI_MIME_TYPE,
                                 bodyPath = resource,
                                 uriPath = path,
                                 cache = vhost.getCache(resource)

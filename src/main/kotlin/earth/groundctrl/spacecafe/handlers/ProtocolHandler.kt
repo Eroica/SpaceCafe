@@ -7,68 +7,66 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 abstract class ProtocolHandler(val conf: ServiceConf) {
+    companion object {
+        const val GEMINI_MIME_TYPE = "text/gemini"
+        private val GEMINI_EXTENSIONS = listOf(".gmi", ".gemini")
+    }
+
     val vHosts = conf.virtualHosts
 
     private val defaultMimeType = conf.defaultMimeType
 
-    fun guessMimeType(
-        path: Path,
-        params: String? = null,
-        size: Boolean = false,
-        cache: Int? = null,
-    ): String {
-        val addSize: (String) -> String = { base ->
-            if (size) {
-                runCatching { Files.size(path) }
-                    .getOrNull()
-                    ?.let { fileSize -> "$base; size=$fileSize" }
-                    ?: base
-            } else {
-                base
-            }
-        }
-
-        val addCache: (String) -> String = { base ->
-            cache?.let { "$base; cache=$it" } ?: base
-        }
-
+    fun guessMimeType(path: Path, params: String? = null, size: Boolean = false, cache: Int? = null): String {
         val baseMime = if (conf.mimeTypes == null) {
-            val pathStr = path.toString()
-            if (listOf(".gmi", ".gemini").any { pathStr.endsWith(it) }) {
-                "text/gemini"
-            } else {
-                try {
-                    Files.probeContentType(path) ?: defaultMimeType
-                } catch (_: Exception) {
-                    defaultMimeType
-                }
-            }
+            path.mimeType()
         } else {
-            val found = conf.mimeTypes.entries.find { (_, exts) ->
+            conf.mimeTypes.entries.find { (_, exts) ->
                 exts.any { path.toString().endsWith(it) }
-            }
-            found?.key ?: defaultMimeType
+            }?.key ?: defaultMimeType
         }
 
-        val mimeWithParams = if (baseMime == "text/gemini") {
+        val mimeWithParams = if (baseMime == GEMINI_MIME_TYPE) {
             if (params == null) baseMime else "$baseMime; ${params.stripMargin(';').trim()}"
         } else {
             baseMime
         }
 
-        return addCache(addSize(mimeWithParams))
+        return when {
+            size && cache != null -> addCache(addSize(mimeWithParams, path), cache)
+            size -> addSize(mimeWithParams, path)
+            cache != null -> addCache(mimeWithParams, cache)
+            else -> mimeWithParams
+        }
     }
 
     abstract fun handle(req: String, uri: URI, remoteAddr: String): Response
 
+    private fun Path.mimeType(): String {
+        return if (GEMINI_EXTENSIONS.any { this.toString().endsWith(it) }) {
+            GEMINI_MIME_TYPE
+        } else {
+            runCatching { Files.probeContentType(this) }
+                .getOrNull()
+                ?: defaultMimeType
+        }
+    }
+
     private fun String.stripMargin(marginChar: Char = ';'): String {
-        return this.lines()
-            .joinToString("\n") { line ->
-                if (line.trimStart().startsWith(marginChar)) {
-                    line.substringAfter(marginChar).trimStart()
-                } else {
-                    line
-                }
-            }
+        return if (trimStart().startsWith(marginChar)) {
+            substringAfter(marginChar).trimStart()
+        } else {
+            this
+        }
+    }
+
+    private fun addSize(base: String, path: Path): String {
+        return runCatching { Files.size(path) }
+            .getOrNull()
+            ?.let { fileSize -> "$base; size=$fileSize" }
+            ?: base
+    }
+
+    private fun addCache(base: String, cache: Int): String {
+        return "$base; cache=$cache"
     }
 }

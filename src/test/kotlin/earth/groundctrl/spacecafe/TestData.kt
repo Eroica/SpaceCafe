@@ -1,6 +1,7 @@
 package earth.groundctrl.spacecafe
 
 import java.nio.file.FileSystems
+import java.nio.file.Path
 import java.nio.file.Paths
 
 internal object TestData {
@@ -8,7 +9,7 @@ internal object TestData {
     private val port = 1965
     private val portStr = port.toString()
 
-    val resPath = Paths.get(javaClass.getResource("/dir").toURI()).parent
+    val resPath: Path = Paths.get(javaClass.getResource("/dir").toURI()).parent
     val resPathStr = resPath.toString()
 
     val conf = ServiceConf(
