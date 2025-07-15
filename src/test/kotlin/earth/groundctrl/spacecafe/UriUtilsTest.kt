@@ -5,12 +5,12 @@ import kotlin.test.assertEquals
 
 internal class UriUtilsTest {
     @Test
-    fun `return true for the emtpy path`() {
+    fun `validPath should return true for the empty path`() {
         assertEquals(true, "".isValidPath())
     }
 
     @Test
-    fun `return true for valid paths`() {
+    fun `validPath should return true for valid paths`() {
         assertEquals(
             true,
             listOf("/", "/file", "/./", "/.", "/dir/", "/dir/../").all { it.isValidPath() }
@@ -18,7 +18,7 @@ internal class UriUtilsTest {
     }
 
     @Test
-    fun `return false for invalid paths`() {
+    fun `validPath should return false for invalid paths`() {
         assertEquals(
             false,
             listOf("/../", "/..", "/dir/../..", "/dir/../..", "/./../", "/./dir/.././../").all { it.isValidPath() }
