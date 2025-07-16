@@ -1,13 +1,12 @@
 package earth.groundctrl.spacecafe
 
-import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.nio.file.Paths
 
 internal object TestData {
-    private val host = "localhost"
-    private val port = 1965
-    private val portStr = port.toString()
+    val host = "localhost"
+    val port = 1965
+    val portStr = port.toString()
 
     val resPath: Path = Paths.get(javaClass.getResource("/dir").toURI()).parent
     val resPathStr = resPath.toString()
@@ -36,16 +35,15 @@ internal object TestData {
         conf.copy(
             virtualHosts =
                 listOf(
-                    conf.virtualHosts[0]
-                        .copy(
-                            directoryListing = true,
-                            directories = listOf(
-                                Directory(
-                                    "dir/",
-                                    directoryListing = true,
-                                )
+                    conf.virtualHosts[0].copy(
+                        directoryListing = true,
+                        directories = listOf(
+                            Directory(
+                                "dir/",
+                                directoryListing = true,
                             )
                         )
+                    )
                 )
         )
     )
@@ -54,45 +52,42 @@ internal object TestData {
         conf.copy(
             virtualHosts =
                 listOf(
-                    conf.virtualHosts[0]
-                        .copy(
-                            directoryListing = true,
-                            directories = listOf(
-                                Directory(
-                                    "dir/",
-                                    directoryListing = false,
-                                    allowCgi = true,
-                                    cache = null
-                                )
+                    conf.virtualHosts[0].copy(
+                        directoryListing = true,
+                        directories = listOf(
+                            Directory(
+                                "dir/",
+                                directoryListing = false,
+                                allowCgi = true,
+                                cache = null
                             )
                         )
+                    )
                 )
         )
     )
 
     val cgiPrefConf = ServiceConf.initConf(
         conf.copy(
-            virtualHosts =
-                listOf(
-                    conf.virtualHosts[0]
-                        .copy(
-                            directoryListing = true,
-                            directories = listOf(
-                                Directory(
-                                    "dir/",
-                                    directoryListing = false,
-                                    allowCgi = true,
-                                    cache = null
-                                ),
-                                Directory(
-                                    "dir/sub/",
-                                    directoryListing = false,
-                                    allowCgi = true,
-                                    cache = null
-                                )
-                            )
+            virtualHosts = listOf(
+                conf.virtualHosts[0].copy(
+                    directoryListing = true,
+                    directories = listOf(
+                        Directory(
+                            "dir/",
+                            directoryListing = false,
+                            allowCgi = true,
+                            cache = null
+                        ),
+                        Directory(
+                            "dir/sub/",
+                            directoryListing = false,
+                            allowCgi = true,
+                            cache = null
                         )
+                    )
                 )
+            )
         )
     )
 
@@ -121,23 +116,20 @@ internal object TestData {
         conf.copy(
             virtualHosts =
                 listOf(
-                    conf.virtualHosts[0]
-                        .copy(
-                            directoryListing = true,
-                            directories = listOf(
-                                Directory(
-                                    "dir/",
-                                    directoryListing = true,
-                                    allowCgi = null,
-                                    cache = 1234
-                                )
+                    conf.virtualHosts[0].copy(
+                        directoryListing = true,
+                        directories = listOf(
+                            Directory(
+                                "dir/",
+                                directoryListing = true,
+                                allowCgi = null,
+                                cache = 1234
                             )
                         )
+                    )
                 )
         )
     )
 
     val mimeTypes = mapOf("config" to listOf(".gmi", ".gemini"))
-
-    private fun getPath(value: String) = FileSystems.getDefault().getPath(resPathStr, value).toString()
 }

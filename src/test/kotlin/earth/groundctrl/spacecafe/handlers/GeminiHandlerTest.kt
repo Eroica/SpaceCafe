@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 internal class GeminiHandlerTest {
     val handler = GeminiHandler(TestData.conf)
@@ -253,6 +254,182 @@ internal class GeminiHandlerTest {
 
     @Test
     fun `handler, cgi should not execute a CGI if the target resource is not executable`() {
-        assertIs<Success>(handleWith(handlerCgi, "gemini://localhost/dir/file.txt"))
+        val response = handleWith(handlerCgi, "gemini://localhost/dir/file.txt")
+        assertIs<Success>(response)
+        assertEquals("text/plain", response.meta)
+        assertEquals(5, response.bodySize)
+    }
+
+    @Test
+    fun `handler, cgi should not execute a CGI if the target resource is a directory`() {
+        assertIs<DirListing>(handleWith(handlerCgi, "gemini://localhost/dir/sub/"))
+    }
+
+    @Test
+    fun `handler, cgi should not apply allow CGI to subdirectories`() {
+        val response = handleWith(handlerCgi, "gemini://localhost/dir/sub/cgi")
+        assertIs<Success>(response)
+        assertEquals("text/plain", response.meta)
+        assertEquals(72, response.bodySize)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI`() {
+        val cgi = handleWith(handlerCgi, "gemini://localhost/dir/cgi")
+        assertIs<Cgi>(cgi)
+        assertEquals(20, cgi.status)
+        assertEquals("text/gemini", cgi.meta)
+        assertTrue("GATEWAY_INTERFACE=CGI/1.1" in cgi.body)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI empty parameters, host and port`() {
+        val cgi = handleWith(handlerCgi, "gemini://localhost/dir/cgi")
+        assertIs<Cgi>(cgi)
+        assertEquals("", cgi.queryString)
+        assertEquals("", cgi.pathInfo)
+        assertEquals("cgi", cgi.scriptName)
+        assertEquals(TestData.host, cgi.host)
+        assertEquals(TestData.portStr, cgi.port)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI host is case-insensitive and the value in the conf is used`() {
+        val cgi = handleWith(handlerCgi, "gemini://LOCALHOST/dir/cgi")
+        assertIs<Cgi>(cgi)
+        assertEquals("", cgi.queryString)
+        assertEquals("", cgi.pathInfo)
+        assertEquals("cgi", cgi.scriptName)
+        assertEquals(TestData.host, cgi.host)
+        assertEquals(TestData.portStr, cgi.port)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI query string`() {
+        val cgi = handleWith(handlerCgi, "gemini://localhost/dir/cgi?query&string")
+        assertIs<Cgi>(cgi)
+        assertEquals("query&string", cgi.queryString)
+        assertEquals("", cgi.pathInfo)
+        assertEquals("cgi", cgi.scriptName)
+        assertEquals(TestData.host, cgi.host)
+        assertEquals(TestData.portStr, cgi.port)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI path info`() {
+        val cgi = handleWith(handlerCgi, "gemini://localhost/dir/cgi/path/info")
+        assertIs<Cgi>(cgi)
+        assertEquals("", cgi.queryString)
+        assertEquals("/path/info", cgi.pathInfo)
+        assertEquals("cgi", cgi.scriptName)
+        assertEquals(TestData.host, cgi.host)
+        assertEquals(TestData.portStr, cgi.port)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI query string and path info`() {
+        val cgi = handleWith(handlerCgi, "gemini://localhost/dir/cgi/path/info?query=string")
+        assertIs<Cgi>(cgi)
+        assertEquals("query=string", cgi.queryString)
+        assertEquals("/path/info", cgi.pathInfo)
+        assertEquals("cgi", cgi.scriptName)
+        assertEquals(TestData.host, cgi.host)
+        assertEquals(TestData.portStr, cgi.port)
+    }
+
+    @Test
+    fun `handler, cgi should not execute an executable if allow CGI is off`() {
+        val cgi = handleWith(handler, "gemini://localhost/dir/cgi")
+        assertIs<Success>(cgi)
+        assertEquals("text/plain", cgi.meta)
+    }
+
+    @Test
+    fun `handler, cgi should return a response with an error if the CGI exits with non 0`() {
+        val bad = handleWith(handlerCgi, "gemini://localhost/dir/bad-cgi")
+        assertIs<Cgi>(bad)
+
+        val meta = "Error executing CGI"
+        assertEquals(42, bad.status)
+        assertEquals(meta, bad.meta)
+        assertTrue(meta in bad.body)
+    }
+
+    @Test
+    fun `handler, cgi should return a response with an error if the CGI response is invalid`() {
+        val bad = handleWith(handlerCgi, "gemini://localhost/dir/bad-response")
+        assertIs<Cgi>(bad)
+
+        val meta = "Invalid response from CGI"
+        assertEquals(42, bad.status)
+        assertEquals(meta, bad.meta)
+        assertTrue(meta in bad.body)
+    }
+
+    @Test
+    fun `handler, cgi should environment variables are optional`() {
+        val cgi = handleWith(handlerCgi, "gemini://localhost/dir/cgi/")
+        assertIs<Cgi>(cgi)
+        assertEquals("cgi", cgi.scriptName)
+        assertEquals(TestData.host, cgi.host)
+        assertEquals(TestData.portStr, cgi.port)
+        assertEquals(mapOf(), cgi.vhEnv)
+    }
+
+    @Test
+    fun `handler, cgi should pass environment variables to the CGI`() {
+        val cgi = handleWith(GeminiHandler(TestData.cgiEnvConf), "gemini://localhost/dir/cgi/")
+        assertIs<Cgi>(cgi)
+        assertEquals("cgi", cgi.scriptName)
+        assertEquals(TestData.host, cgi.host)
+        assertEquals(TestData.portStr, cgi.port)
+        assertEquals(mapOf("env1" to "value"), cgi.vhEnv)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI with the environment variables`() {
+        val cgi = handleWith(GeminiHandler(TestData.cgiEnvConf), "gemini://localhost/dir/cgi")
+        assertIs<Cgi>(cgi)
+        assertEquals(20, cgi.status)
+        assertEquals("text/gemini", cgi.meta)
+        assertTrue("env1=value" in cgi.body)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI when it is the index document`() {
+        val cgi = handleWith(GeminiHandler(TestData.cgiIndexConf), "gemini://localhost/dir/")
+        assertIs<Cgi>(cgi)
+        assertEquals(20, cgi.status)
+        assertEquals("text/gemini", cgi.meta)
+        assertTrue("GATEWAY_INTERFACE=CGI/1.1" in cgi.body)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI when it is the index document (full name)`() {
+        val cgi = handleWith(GeminiHandler(TestData.cgiIndexConf), "gemini://localhost/dir/cgi")
+        assertIs<Cgi>(cgi)
+        assertEquals(20, cgi.status)
+        assertEquals("text/gemini", cgi.meta)
+        assertTrue("GATEWAY_INTERFACE=CGI/1.1" in cgi.body)
+    }
+
+    @Test
+    fun `handler, cgi should execute a CGI when it is the index document (full name, path info)`() {
+        val cgi = handleWith(GeminiHandler(TestData.cgiIndexConf), "gemini://localhost/dir/cgi/path/info")
+        assertIs<Cgi>(cgi)
+        assertEquals(20, cgi.status)
+        assertEquals("text/gemini", cgi.meta)
+        assertTrue("GATEWAY_INTERFACE=CGI/1.1" in cgi.body)
+        assertTrue("PATH_INFO=/path/info" in cgi.body)
+    }
+
+    @Test
+    fun `handler, cgi should resolve CGI directories from more to less specific`() {
+        val cgi = handleWith(GeminiHandler(TestData.cgiPrefConf), "gemini://localhost/dir/sub/cgiOk/path/info")
+        assertIs<Cgi>(cgi)
+        assertEquals(20, cgi.status)
+        assertEquals("text/gemini", cgi.meta)
+        assertTrue("GATEWAY_INTERFACE=CGI/1.1" in cgi.body)
+        assertTrue("PATH_INFO=/path/info" in cgi.body)
     }
 }
