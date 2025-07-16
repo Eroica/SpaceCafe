@@ -167,7 +167,7 @@ class Cgi(
 
     override val status: Int = parsed.first
     override val meta: String = parsed.second
-    private val body: String = parsed.third
+    val body: String = parsed.third
 
     override val bodySize: Long
         get() = body.toByteArray().size.toLong()
