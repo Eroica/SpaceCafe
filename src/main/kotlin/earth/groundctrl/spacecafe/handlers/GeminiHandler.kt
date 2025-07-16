@@ -12,7 +12,7 @@ private val logger = KotlinLogging.logger {}
 class GeminiHandler(conf: ServiceConf) : ProtocolHandler(conf) {
     override fun handle(req: String, uri: URI, remoteAddr: String): Response {
         val host = uri.host
-        val path = uri.path.decode()
+        val rawPath = uri.path.decode()
         val vhost = uri.toVirtualHost(vHosts)
 
         return when {
@@ -24,7 +24,7 @@ class GeminiHandler(conf: ServiceConf) : ProtocolHandler(conf) {
                 logger.debug { "user info present" }
                 BadRequest(req, "Userinfo component is not allowed")
             }
-            !path.isValidPath() -> {
+            !rawPath.isValidPath() -> {
                 logger.debug { "invalid path, out of root" }
                 BadRequest(req)
             }
@@ -33,14 +33,14 @@ class GeminiHandler(conf: ServiceConf) : ProtocolHandler(conf) {
                 PermanentRedirect(req, uri.normalize().toString())
             }
             else -> {
-                val (root, rawPath) = vhost.getRoot(path)
-                val resource = FileSystems.getDefault().getPath(root, rawPath).normalize()
+                val (root, path) = vhost.getRoot(rawPath)
+                val resource = FileSystems.getDefault().getPath(root, path).normalize()
                 val cgi = vhost.getCgi(resource) ?: vhost.getCgi(resource.resolve(vhost.indexFile))
 
                 logger.debug { "requesting: '$resource', cgi is '$cgi'" }
 
                 when {
-                    cgi?.let { !it.isDirectory() && it.isExecutable() } == true -> {
+                    cgi?.toFile()?.let { it.isFile && it.canExecute() } == true -> {
                         logger.debug { "is cgi, will execute" }
 
                         val cgiFile = cgi.toFile()
