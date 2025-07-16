@@ -33,6 +33,19 @@ tasks {
     shadowJar {
         archiveClassifier = ""
     }
+    named<Copy>("processTestResources") {
+        doLast {
+            listOf(
+                "${layout.buildDirectory}/resources/test/dir/bad-cgi",
+                "${layout.buildDirectory}/resources/test/dir/bad-response",
+                "${layout.buildDirectory}/resources/test/dir/cgi",
+                "${layout.buildDirectory}/resources/test/dir/sub/cgi",
+                "${layout.buildDirectory}/resources/test/dir/sub/cgiOk"
+            ).forEach {
+                file(it).setExecutable(true)
+            }
+        }
+    }
 }
 kotlin {
     jvmToolchain(21)
