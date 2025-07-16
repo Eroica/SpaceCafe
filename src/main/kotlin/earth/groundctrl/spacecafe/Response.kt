@@ -145,10 +145,10 @@ class Cgi(
 
         if (exitCode == 0) {
             val responseBody = output.toString(Charsets.UTF_8.name())
-            val header = responseBody.lineSequence().firstOrNull()
+            val header = responseBody.split("\r\n").first()
+            val match = Regex("""^(\d{2}) (.*)""").matchEntire(header)
 
-            val match = Regex("""^(\d{2}) (.*)""").matchEntire(header ?: "")
-            if (match != null && header!!.length <= MAX_REQ_LEN) {
+            if (match != null && header.length <= MAX_REQ_LEN) {
                 val status = match.groupValues[1].toInt()
                 val meta = match.groupValues[2]
                 Triple(status, meta, responseBody)
