@@ -80,13 +80,15 @@ class Server(
                     val tlsChannel = builder.build()
                     val remoteAddr = plainChannel.socket().inetAddress.hostAddress
 
-                    try {
-                        handleConnection(tlsChannel, remoteAddr)
-                    } catch (e: Exception) {
-                        logger.error(e) { "Error handling TLS connection" }
-                    } finally {
-                        tlsChannel.close()
-                        plainChannel.close()
+                    launch {
+                        try {
+                            handleConnection(tlsChannel, remoteAddr)
+                        } catch (e: Exception) {
+                            logger.error(e) { "Error handling TLS connection" }
+                        } finally {
+                            tlsChannel.close()
+                            plainChannel.close()
+                        }
                     }
                 }
             } finally {
