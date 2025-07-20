@@ -8,6 +8,7 @@ import java.net.InetSocketAddress
 import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.channels.ServerSocketChannel
+import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 
 private val logger = KotlinLogging.logger {}
@@ -103,25 +104,36 @@ class Server(
         /* Reading a single byte more than 1024 to detect a too large request */
         val readBuffer = ByteBuffer.allocate(MAX_REQ_LEN + 1)
         val requestBuilder = StringBuilder()
+        val decoder = StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
 
-        while (true) {
-            readBuffer.clear()
-            val bytesRead =  tlsChannel.read(readBuffer)
-            if (bytesRead == -1) {
-                return
+        val resp = try {
+            while (true) {
+                readBuffer.clear()
+                val bytesRead =  tlsChannel.read(readBuffer)
+                if (bytesRead == -1) {
+                    return
+                }
+
+                readBuffer.flip()
+                val chunk = decoder.decode(readBuffer).toString()
+                requestBuilder.append(chunk)
+
+                if (requestBuilder.contains("\r\n")) {
+                    break
+                }
             }
 
-            readBuffer.flip()
-            val chunk = StandardCharsets.UTF_8.decode(readBuffer).toString()
-            requestBuilder.append(chunk)
-
-            if (requestBuilder.contains("\r\n")) {
-                break
+            val requestLine = requestBuilder.toString().lineSequence().first().trim()
+            if (requestLine.length > MAX_REQ_LEN) {
+                throw RuntimeException()
             }
+
+            handleReq(requestLine, remoteAddr)
+        } catch (_: Exception) {
+            BadRequest(requestBuilder.toString())
         }
-
-        val requestLine = requestBuilder.toString().lineSequence().first().trim()
-        val resp = if (requestLine.length > MAX_REQ_LEN) BadRequest(requestLine) else handleReq(requestLine, remoteAddr)
 
         resp.toFlow().collect { chunk ->
             val writeBuffer = ByteBuffer.wrap(chunk)
