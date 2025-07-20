@@ -100,7 +100,8 @@ class Server(
     private suspend fun handleConnection(tlsChannel: ServerTlsChannel, remoteAddr: String) {
         logger.debug { "new connection $remoteAddr" }
 
-        val readBuffer = ByteBuffer.allocate(MAX_REQ_LEN)
+        /* Reading a single byte more than 1024 to detect a too large request */
+        val readBuffer = ByteBuffer.allocate(MAX_REQ_LEN + 1)
         val requestBuilder = StringBuilder()
 
         while (true) {
@@ -120,7 +121,7 @@ class Server(
         }
 
         val requestLine = requestBuilder.toString().lineSequence().first().trim()
-        val resp = handleReq(requestLine, remoteAddr)
+        val resp = if (requestLine.length > MAX_REQ_LEN) BadRequest(requestLine) else handleReq(requestLine, remoteAddr)
 
         resp.toFlow().collect { chunk ->
             val writeBuffer = ByteBuffer.wrap(chunk)

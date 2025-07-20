@@ -4,8 +4,6 @@ import earth.groundctrl.spacecafe.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.net.URI
 import java.nio.file.FileSystems
-import kotlin.io.path.isDirectory
-import kotlin.io.path.isExecutable
 
 private val logger = KotlinLogging.logger {}
 
