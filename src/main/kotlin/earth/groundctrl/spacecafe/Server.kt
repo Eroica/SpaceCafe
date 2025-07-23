@@ -7,9 +7,11 @@ import tlschannel.ServerTlsChannel
 import java.net.InetSocketAddress
 import java.net.URI
 import java.nio.ByteBuffer
+import java.nio.channels.ClosedChannelException
 import java.nio.channels.ServerSocketChannel
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import javax.net.ssl.SSLHandshakeException
 
 private val logger = KotlinLogging.logger {}
 
@@ -65,11 +67,8 @@ class Server(
     }
 
     fun serve(): Job {
-        val sslContexts = conf.virtualHosts.associate {
-            it.host to genSSLContext(it)
-        }
+        val sslContexts = conf.virtualHosts.associate { it.host to genSSLContext(it) }
         val sniFactory = sniKeyManager(sslContexts)
-
         val serverChannel = ServerSocketChannel.open()
         serverChannel.bind(InetSocketAddress(conf.address, conf.port), 100)
 
@@ -84,6 +83,10 @@ class Server(
                     launch {
                         try {
                             handleConnection(tlsChannel, remoteAddr)
+                        } catch (_: SSLHandshakeException) {
+                            logger.info { "$remoteAddr - invalid handshake" }
+                        } catch (_: ClosedChannelException) {
+                            logger.info { "$remoteAddr - channel closed without request" }
                         } catch (e: Exception) {
                             logger.error(e) { "Error handling TLS connection" }
                         } finally {
