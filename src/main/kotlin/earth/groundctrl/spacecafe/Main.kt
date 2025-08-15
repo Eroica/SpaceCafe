@@ -41,7 +41,15 @@ suspend fun main(args: Array<String>) {
 
     Runtime.getRuntime().addShutdownHook(Thread {
         logger.info { "Shutdown signal received, stopping server ..." }
-        scope.cancel()
+        server.closeChannel()
+
+        runBlocking {
+            try {
+                withTimeout(5000) { scope.coroutineContext[Job]?.cancelAndJoin() }
+            } catch (_: TimeoutCancellationException) {
+                logger.warn { "Forced shutdown after 5s timeout (some connections may be incomplete)" }
+            }
+        }
     })
 
     logger.info { "Starting $APP_NAME $VERSION, listening on ${conf.address}:${conf.port}" }

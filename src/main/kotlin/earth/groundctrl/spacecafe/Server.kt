@@ -7,6 +7,7 @@ import tlschannel.ServerTlsChannel
 import java.net.InetSocketAddress
 import java.net.URI
 import java.nio.ByteBuffer
+import java.nio.channels.AsynchronousCloseException
 import java.nio.channels.ClosedChannelException
 import java.nio.channels.ServerSocketChannel
 import java.nio.charset.CodingErrorAction
@@ -25,13 +26,14 @@ class Server(
     }
 
     private val geminiHandler = GeminiHandler(conf)
+    @Volatile
+    private var channel: ServerSocketChannel? = null
 
     fun handleReq(req: String, remoteAddr: String): Response {
         return try {
             val uri = URI.create(req)
-            val scheme = uri.scheme
 
-            when (scheme) {
+            when (val scheme = uri.scheme) {
                 null -> {
                     logger.debug { "no scheme" }
                     BadRequest(req)
@@ -69,7 +71,7 @@ class Server(
     fun serve(): Job {
         val sslContexts = conf.virtualHosts.associate { it.host to genSSLContext(it) }
         val sniFactory = sniKeyManager(sslContexts)
-        val serverChannel = ServerSocketChannel.open()
+        val serverChannel = ServerSocketChannel.open().also { channel = it }
         serverChannel.bind(InetSocketAddress(conf.address, conf.port), 100)
 
         return scope.launch {
@@ -95,10 +97,19 @@ class Server(
                         }
                     }
                 }
+            } catch (_: AsynchronousCloseException) {
+            } catch (_: ClosedChannelException) {
+            } catch (e: Exception) {
+                logger.error(e) { "Unexpected error" }
             } finally {
                 serverChannel.close()
             }
         }
+    }
+
+    fun closeChannel() {
+        channel?.close()
+        channel = null
     }
 
     private suspend fun handleConnection(tlsChannel: ServerTlsChannel, remoteAddr: String) {
@@ -113,6 +124,7 @@ class Server(
 
         val resp = try {
             while (true) {
+                currentCoroutineContext().ensureActive()
                 readBuffer.clear()
                 val bytesRead =  tlsChannel.read(readBuffer)
                 if (bytesRead == -1) {
@@ -134,6 +146,8 @@ class Server(
             }
 
             handleReq(requestLine, remoteAddr)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             BadRequest(requestBuilder.toString())
         }
