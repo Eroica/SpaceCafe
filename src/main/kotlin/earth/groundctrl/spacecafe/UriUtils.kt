@@ -29,5 +29,5 @@ fun String.isValidPath(): Boolean {
 }
 
 fun URI.toVirtualHost(vHosts: List<VirtualHost>): VirtualHost? = vHosts.find {
-    it.host.lowercase() == this.host.lowercase()
+    it.host.equals(this.host, ignoreCase = true)
 }

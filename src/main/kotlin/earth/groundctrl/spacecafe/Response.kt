@@ -84,7 +84,7 @@ class DirListing(
         }
     }
 
-    override val bodySize = body.toByteArray().size.toLong()
+    override val bodySize: Long = body.toByteArray().size.toLong()
 
     override fun toFlow(): Flow<ByteArray> = flow {
         val statusLine = buildString {
