@@ -109,7 +109,6 @@ class Cgi(
     val vhEnv: Map<String, String>
 ) : Response {
     companion object {
-        const val MAX_REQ_LEN = 1024 // mimic Server.maxReqLen
         private val logger = KotlinLogging.logger {}
     }
 
@@ -148,7 +147,7 @@ class Cgi(
             val header = responseBody.split("\r\n").first()
             val match = Regex("""^(\d{2}) (.*)""").matchEntire(header)
 
-            if (match != null && header.length <= MAX_REQ_LEN) {
+            if (match != null && header.length <= Server.MAX_REQ_LEN) {
                 val status = match.groupValues[1].toInt()
                 val meta = match.groupValues[2]
                 Triple(status, meta, responseBody)
@@ -177,7 +176,7 @@ class Cgi(
     }
 
     private fun respError(status: Int, meta: String): Triple<Int, String, String> {
-        val limitedMeta = meta.take(MAX_REQ_LEN - 5)
+        val limitedMeta = meta.take(Server.MAX_REQ_LEN - 5)
         return Triple(status, limitedMeta, "$status $limitedMeta\r\n")
     }
 }
